@@ -63,6 +63,7 @@ print(tweets)
 ```
 
 ## How to get account cookies:
+Following a private "target" account is necessary to access its data. Then, account cookies can be used to scrape the account.
 1. Open the Chrome browser and go to the Twitter website.
 2. If you're not already logged in, log in to your Twitter account.
 3. Right-click anywhere on the page and select "Inspect" from the context menu. Alternatively, you can press "Ctrl+Shift+I" (Windows) or "Cmd+Option+I" (Mac) on your keyboard.
