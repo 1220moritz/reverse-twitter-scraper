@@ -50,7 +50,7 @@ class TwitterScraper:
 
         # format proxy
         self.__proxyCounter = 0
-        if proxyList != "" and proxyList != None:
+        if proxyList != "" and proxyList != None and proxyList != []:
             self.proxies = []
             for proxy in proxyList:
                 __split = str(proxy).replace("\n", "").split(":")
