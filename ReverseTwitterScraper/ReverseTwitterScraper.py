@@ -1,12 +1,14 @@
 import time
 import traceback
 
+import asyncio
+import aiohttp
 from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
 import requests
 
 
-class TwitterScraper:
+class simpleTwitterScraper:
 
     def cookieDict(self, cookies):
         if type(cookies) == dict:
@@ -37,7 +39,7 @@ class TwitterScraper:
         """
         makes everything ready to scrape twitter.
 
-        :param str twitterHandle: e.g. https://twitter.com/elonmusk -> handle = elonmusk
+        :param str twitterHandle: e.g. https://twitter.com/elonmusk -> handle = elonmusk or array with multiple handles ["elonmusk", "POTUS", "BitcoinMagazine"]
         :param str chromedriverPath: e.g. C:/Program Files (x86)/chromedriver.exe
         :param str cookies: your twitter account cookies
         :param int timeout: default=5, if the page doesn't load in time, upper this value
@@ -50,7 +52,7 @@ class TwitterScraper:
 
         # format proxy
         self.__proxyCounter = 0
-        if proxyList != "" and proxyList != None and proxyList != []:
+        if proxyList != "" and proxyList != None:
             self.proxies = []
             for proxy in proxyList:
                 __split = str(proxy).replace("\n", "").split(":")
@@ -58,8 +60,25 @@ class TwitterScraper:
                 self.proxies.append(fProxy)
         else:
             self.proxies = None
+            
+            
+        # convert handle to id [{"handle": handle, "id": id]}]
+        self.__multipleHandles = False
+        if isinstance(twitterHandle, list) and len(twitterHandle) > 1:
+            self.__multipleHandles = True
+            print("converting twitter-ids", end=" ")
+            retries = 0
+            while retries < 5:
+                try:
+                    self._IDList = asyncio.run(self.__getTwitterIDs())
+                    break
+                except Exception as e:
+                    #print(traceback.format_exc())
+                    retries = retries + 1
+            print("- done")
+                
 
-        #get all the important data to send a request
+        # get all the important data to send a request
         __twitterData = self.getTwitterGuestData(cookies=cookies)
         self.__headers = __twitterData[0]
         self.__headersDict = __twitterData[1]
@@ -87,6 +106,29 @@ class TwitterScraper:
         self.__userResp = \
         self.__openingResp['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries'][0]['content']['itemContent']['tweet_results']['result']['core']['user_results']['result']
 
+
+    async def __getID(self, handle):
+        headers = {'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'}
+        async with aiohttp.ClientSession() as s:
+            text = "error-co"
+            data = None
+            while text == "error-co":
+                async with s.post(url="https://tweeterid.com/ajax.php", headers=headers, data=f"input={handle}") as resp:
+                    text = await resp.text()
+                    if text != "error-co":
+                        data = {"handle": handle, "id": text}
+                    else:
+                        time.sleep(0.05)
+            return data
+
+    async def __getTwitterIDs(self):
+            coroutines = []
+            for handle in self.__twitterHandle:
+                coroutines.append(self.__getID(handle))
+            info = await asyncio.gather(*coroutines)
+            return info
+                    
+      
     def getTwitterGuestData(self, cookies, proxySupport=False):
         if proxySupport:
             wireOptions = {
@@ -99,13 +141,16 @@ class TwitterScraper:
         # get driver
         options = Options()
         options.add_argument("--headless")
-        driver = webdriver.Chrome(self.__chromedriverPath, options=options)
-        #driver = webdriver.Chrome(self.__chromedriverPath, seleniumwire_options=wireOptions, options=options)
-        #driver = webdriver.Chrome(self.__chromedriverPath)
+        driver = webdriver.Chrome(self.__chromedriverPath, options=options) #headless
+        #driver = webdriver.Chrome(self.__chromedriverPath, seleniumwire_options=wireOptions, options=options) #headless, proxy
+        #driver = webdriver.Chrome(self.__chromedriverPath) #window
 
-        # get main URL
-        driver.get(f"https://twitter.com/{self.__twitterHandle}")
-        # time.sleep(timeout)  # sleep to let the twitter page load
+
+        if self.__multipleHandles:
+            driver.get(f"https://twitter.com/{self.__twitterHandle[0]}")
+        else:
+            driver.get(f"https://twitter.com/{self.__twitterHandle}")
+        #time.sleep(self.__timeout)  # sleep to let the twitter page load
 
         headersDict = {}
         for headerReq in driver.requests:
@@ -116,7 +161,7 @@ class TwitterScraper:
                 headersDict = dict(headerReq.headers)
         time.sleep(1)
         driver.close()
-
+        
         headers = {
             'authorization': headersDict['authorization'],
             'cookie': headersDict['cookie'],
@@ -124,6 +169,8 @@ class TwitterScraper:
             'x-csrf-token': headersDict['x-csrf-token'],
             'x-guest-token': headersDict['x-guest-token']
         }
+
+        
         # check for cookies
         if cookies != "":
             # get dummy URL to set cookies
@@ -152,8 +199,75 @@ class TwitterScraper:
         returns all (unfiltered) data for the account
         """
         return self.__openingResp.json()
+    
+    # get Tweet data multiple Accs
+    async def __getTweetsPlainAsync(self, handle, id):
+        e1 = 0
+        while e1 < 5:
+            try:
+                urlTwitter = f"https://api.twitter.com/graphql/CkON7wJrKLwEVV59ClcmjA/UserTweets?variables=%7B%22userId%22%3A%22{id}%22%2C%22count%22%3A40%2C%22includePromotedContent%22%3Atrue%2C%22withQuickPromoteEligibilityTweetFields%22%3Atrue%2C%22withSuperFollowsUserFields%22%3Atrue%2C%22withDownvotePerspective%22%3Afalse%2C%22withReactionsMetadata%22%3Afalse%2C%22withReactionsPerspective%22%3Afalse%2C%22withSuperFollowsTweetFields%22%3Atrue%2C%22withVoice%22%3Atrue%2C%22withV2Timeline%22%3Atrue%7D&features=%7B%22responsive_web_twitter_blue_verified_badge_is_enabled%22%3Atrue%2C%22responsive_web_graphql_exclude_directive_enabled%22%3Atrue%2C%22verified_phone_label_enabled%22%3Afalse%2C%22responsive_web_graphql_timeline_navigation_enabled%22%3Atrue%2C%22responsive_web_graphql_skip_user_profile_image_extensions_enabled%22%3Afalse%2C%22tweetypie_unmention_optimization_enabled%22%3Atrue%2C%22vibe_api_enabled%22%3Atrue%2C%22responsive_web_edit_tweet_api_enabled%22%3Atrue%2C%22graphql_is_translatable_rweb_tweet_is_translatable_enabled%22%3Atrue%2C%22view_counts_everywhere_api_enabled%22%3Atrue%2C%22longform_notetweets_consumption_enabled%22%3Atrue%2C%22tweet_awards_web_tipping_enabled%22%3Afalse%2C%22freedom_of_speech_not_reach_fetch_enabled%22%3Afalse%2C%22standardized_nudges_misinfo%22%3Atrue%2C%22tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled%22%3Afalse%2C%22interactive_text_enabled%22%3Atrue%2C%22responsive_web_text_conversations_enabled%22%3Afalse%2C%22longform_notetweets_richtext_consumption_enabled%22%3Afalse%2C%22responsive_web_enhance_cards_enabled%22%3Afalse%7D"
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(urlTwitter, headers=self.__headers) as resp:
+                        data = await resp.json()
+                        data = {"handle": handle, "id": id, "resp": data['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries']}
+                break
+            except:
+                print(traceback.format_exc())
+                print("failed to scrape tweets. Trying again with new data")
+                e1 = e1 + 1
+                self.__proxyCounter = self.__proxyCounter + 1
+                __twitterData = self.getTwitterGuestData(cookies=self.__accCookies)
+                self.__headers = __twitterData[0]
+                self.__headersDict = __twitterData[1]
+                self.__cookies = __twitterData[2]
+        return data
+    
+    
+    async def __getTweetsPlainMain(self):
+        coroutines = []
+        for data in self._IDList:
+            coroutines.append(self.__getTweetsPlainAsync(data['handle'], data['id']))
+        info = await asyncio.gather(*coroutines)
+        return info
+    
+    def getTweetsPlainMultiple(self):
+        """
+        get all (unfiltered) tweets from every account in your handle list (unnecessary data and ads included)
+        
+        call with asyncio.run(scraper.getTweetsPlainMultiple())
+        """
+        resp = asyncio.run(self.__getTweetsPlainMain())
+        return resp
+    
+    def getTweetsTextMultiple(self):
+        """
+        get text from all tweets from every account in your handle list
+        """
+        resp = asyncio.run(self.__getTweetsPlainMain())
+    
+        accountTweets = []
+        for handle in resp:
+            tweets = []
+            for tweet in handle['resp']:
+                if "promotedTweet" not in tweet['entryId']:
+                    try:
+                        tweets.append({
+                            'entryId': tweet['entryId'],
+                            'retweet': self.getRetweetInfo(tweet),
+                            'text': tweet['content']['itemContent']['tweet_results']['result']['legacy']['full_text']})
+                    except:
+                        continue
+            accountTweets.append({
+                "handle": handle['handle'],
+                "id": handle['id'],
+                "tweets": tweets
+            })
+        return accountTweets
+    
+    
 
     # get Tweet data
+        
     def getRetweetInfo(self, singlePlainTweet, getRetweetInfo=False):
         """
         checks if the tweet is a retweet (returns True/False/TweetInfo)
@@ -170,9 +284,9 @@ class TwitterScraper:
         else:
             return False
 
-    def getAllTweetsPlain(self):
+    def getTweetsPlain(self):
         """
-        get all (unfiltered) tweets from an account
+        get all (unfiltered) tweets from an account (unnecessary data included)
         """
         e1 = 0
         while e1 < 5:
@@ -191,11 +305,11 @@ class TwitterScraper:
                 self.__cookies = __twitterData[2]
         return jresp
 
-    def getAllTweetsText(self):
+    def getTweetsText(self):
         """
         get text from all tweets from an account
         """
-        resp = self.getAllTweetsPlain()
+        resp = self.getTweetsPlain()
         tweets = []
         for tweet in resp:
             if "promotedTweet" not in tweet['entryId']:
@@ -270,7 +384,7 @@ class TwitterScraper:
 
     def userID(self):
         """
-        returns if the account has an NFT avatar
+        returns the id of an account
         """
         return self.__userResp['id']
 
@@ -297,4 +411,3 @@ class TwitterScraper:
         returns all (unfiltered) data about an account
         """
         return self.__userResp
-     
