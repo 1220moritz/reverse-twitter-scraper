@@ -1,5 +1,5 @@
 # ReverseTwitterScraper
-ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a Twitter account. This package uses Selenium and Requests module to scrape tweets.
+ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a single or multiple Twitter accounts. This package uses Selenium and Requests module to scrape tweets.
 
 ## Installation
 To install the package, simply run the following command:
@@ -18,14 +18,20 @@ Here's an example code:
 ```
 from ReverseTwitterScraper import TwitterScraper
 
-twitter_handle = "elonmusk"
 chromedriver_path = "C:/Program Files (x86)/chromedriver.exe"
 cookies = ""
 timeout = 5
 proxy_list = []
 
+# single account
+twitter_handle = "elonmusk"
 scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, timeout, proxy_list)
 tweets = scraper.getAllTweetsText()
+
+# multiple accounts
+twitter_handles = ["elonmusk", "POTUS", "latestinspace"]
+scraper = TwitterScraper(twitter_handles, chromedriver_path, cookies, timeout, proxy_list)
+tweets = scraper.getTweetsTextMultiple()
 
 print(tweets)
 ```
@@ -36,7 +42,7 @@ Finally, we call the getAllTweetsText() method to get the tweets of the specifie
 ## Parameters
 The TwitterScraper class takes the following parameters:
 
-- twitterHandle: The Twitter handle of the account to be scraped. For example, if the account URL is https://twitter.com/elonmusk, then the twitterHandle parameter should be set to elonmusk.
+- twitterHandle: The Twitter handle of the account(s) to be scraped. For example, if the account URL is https://twitter.com/elonmusk, then the twitterHandle parameter should be set to elonmusk.
 
 - chromedriverPath: The path of the Chrome driver executable file. This file is required to use the Selenium module.
 
@@ -46,21 +52,6 @@ The TwitterScraper class takes the following parameters:
 
 - proxyList: (Optional) A list of proxies to use for scraping. The list should contain proxy addresses in the format ip:port:user:pw.
 
-## Examples
-```
-from ReverseTwitterScraper import TwitterScraper
-
-twitter_handle = "elonmusk"
-chromedriver_path = "C:/Program Files (x86)/chromedriver.exe"
-cookies = ""
-timeout = 5
-proxy_list = []
-
-scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, timeout, proxy_list)
-tweets = scraper.get_tweets()
-
-print(tweets)
-```
 
 ## How to get account cookies:
 Following a private "target" account is necessary to access its data. Then, account cookies can be used to scrape the account.
@@ -76,6 +67,15 @@ Following a private "target" account is necessary to access its data. Then, acco
 By following these steps, you should be able to retrieve the necessary cookies from your Twitter account and use them in your Python code to scrape data.
 
 ## Methodes:
+
+### getTweetsPlainMultiple()
+      this is only if you want to scrape multiple twitter acccounts
+      get all (unfiltered) tweets from every account in your handle list (unnecessary data and ads included)
+     
+### getTweetsTextMultiple()
+      this is only if you want to scrape multiple twitter acccounts
+      get text from all tweets from every account in your handle list
+
 ### getAllAccData()
       returns all (unfiltered) data for the account
 
