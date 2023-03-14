@@ -126,7 +126,7 @@ By following these steps, you should be able to retrieve the necessary cookies f
         returns if the account has an NFT avatar
 
 ### userID()
-        returns if the account has an NFT avatar
+        returns the userID of the account
 
 ### isBlueVerified()
         returns if the account is verified with a twitter blue check
