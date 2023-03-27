@@ -8,7 +8,7 @@ from selenium.webdriver.chrome.options import Options
 import requests
 
 
-class simpleTwitterScraper:
+class TwitterScraper:
 
     def cookieDict(self, cookies):
         if type(cookies) == dict:
