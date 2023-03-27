@@ -30,7 +30,7 @@ proxy_list = []
 # single account
 twitter_handle = "elonmusk"
 scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, timeout, proxy_list)
-tweets = scraper.getAllTweetsText()
+tweets = scraper.getTweetsText()
 
 # multiple accounts
 twitter_handles = ["elonmusk", "POTUS", "latestinspace"]
