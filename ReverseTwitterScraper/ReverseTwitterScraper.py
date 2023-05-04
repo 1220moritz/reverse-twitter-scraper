@@ -2,10 +2,9 @@ import time
 import traceback
 
 import asyncio
-import aiohttp
+import httpx
 from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
-import requests
 
 
 class TwitterScraper:
@@ -29,26 +28,26 @@ class TwitterScraper:
         return cookies
 
     def changeProxy(self):
-        if self.proxies:
+        if type(self.proxies) is list and self.__proxyCounter < len(self.proxies) - 1:    #change to next proxy in list
+            return self.proxies[self.__proxyCounter]
+        elif type(self.proxies) is list and self.__proxyCounter >= len(self.proxies) - 1: # restart with first proxy in list
+            self.__proxyCounter = 0
             return self.proxies[self.__proxyCounter]
         else:
             return None
-
-
-    def __init__(self, twitterHandle, chromedriverPath, cookies="", timeout=5, proxyList=""):
+        
+    def __init__(self, twitterHandle: list, chromedriverPath: str, cookies="", proxyList=""):
         """
         makes everything ready to scrape twitter.
 
-        :param str twitterHandle: e.g. https://twitter.com/elonmusk -> handle = elonmusk or array with multiple handles ["elonmusk", "POTUS", "BitcoinMagazine"]
+        :param list twitterHandle: e.g. https://twitter.com/elonmusk -> handle = [elonmusk] or multiple handles ["elonmusk", "POTUS", "BitcoinMagazine"]
         :param str chromedriverPath: e.g. C:/Program Files (x86)/chromedriver.exe
         :param str cookies: your twitter account cookies
-        :param int timeout: default=5, if the page doesn't load in time, upper this value
         :param arr proxyList: your array of proxies. ip:port:user:pw
         """
         self.__twitterHandle = twitterHandle
         self.__chromedriverPath = chromedriverPath
         self.__accCookies = cookies
-        self.__timeout = timeout
 
         # format proxy
         self.__proxyCounter = 0
@@ -63,9 +62,7 @@ class TwitterScraper:
             
             
         # convert handle to id [{"handle": handle, "id": id]}]
-        self.__multipleHandles = False
-        if isinstance(twitterHandle, list) and len(twitterHandle) > 1:
-            self.__multipleHandles = True
+        if isinstance(twitterHandle, list):
             print("converting twitter-ids", end=" ")
             retries = 0
             while retries < 5:
@@ -73,96 +70,85 @@ class TwitterScraper:
                     self._IDList = asyncio.run(self.__getTwitterIDs())
                     break
                 except Exception as e:
-                    #print(traceback.format_exc())
+                    print(traceback.format_exc())
                     retries = retries + 1
             print("- done")
+        else:
+            raise Exception("twitterHandle must be a list of handles")
                 
 
         # get all the important data to send a request
-        __twitterData = self.getTwitterGuestData(cookies=cookies)
-        self.__headers = __twitterData[0]
-        self.__headersDict = __twitterData[1]
-        self.__cookies = __twitterData[2]
-        self.__reqUrl = __twitterData[3]
-        self.__userID = __twitterData[4]
-
-        self.__session = requests.session()
-        e2 = 0
-        while e2 < 5:
+        retries = 0
+        while retries < 5:
             try:
-                self.__openingResp = self.__session.get(url=self.__reqUrl, headers=self.__headers, cookies=self.__cookies, proxies=self.changeProxy())
+                self.getTwitterGuestData(cookies=cookies)
+                break
+            except:
+                #print(traceback.format_exc())
+                retries += 1
+                self.__proxyCounter += 1
+            
+        retries = 0
+        while retries < 5:
+            try:
+                self.__openingResp = httpx.get(url=self.__reqUrl, headers=self.__headers, cookies=self.__cookies).json()
+                self.__userResp = self.__openingResp['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries'][0]['content']['itemContent']['tweet_results']['result']['core']['user_results']['result']
                 break
             except:
                 #print(traceback.format_exc())
                 print("failed openingResp. Trying again with new proxy")
-                e2 = e2 + 1
-                self.__proxyCounter = self.__proxyCounter + 1
-                __twitterData = self.getTwitterGuestData(cookies=self.__accCookies)
-                self.__headers = __twitterData[0]
-                self.__headersDict = __twitterData[1]
-                self.__cookies = __twitterData[2]
+                retries += 1
+                self.__proxyCounter += 1
+                self.getTwitterGuestData(cookies=self.__accCookies)
 
-        self.__openingResp = self.__openingResp.json()  # may raise a JsonDecodeError when you get ratelimited
-        self.__userResp = \
-        self.__openingResp['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries'][0]['content']['itemContent']['tweet_results']['result']['core']['user_results']['result']
-
-
-    async def __getID(self, handle):
+    async def __getID(self, client: httpx.Client, handle):
         headers = {'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'}
-        async with aiohttp.ClientSession() as s:
-            text = "error-co"
-            data = None
-            while text == "error-co":
-                async with s.post(url="https://tweeterid.com/ajax.php", headers=headers, data=f"input={handle}") as resp:
-                    text = await resp.text()
-                    if text != "error-co":
-                        data = {"handle": handle, "id": text}
-                    else:
-                        time.sleep(0.05)
-            return data
+        text = "error-co"
+        data = None
+        while text == "error-co":
+            resp = await client.post(url="https://tweeterid.com/ajax.php", headers=headers, data=f"input={handle}")
+            text = resp.text
+            if text != "error-co":
+                data = {"handle": handle, "id": text}
+            else:
+                await asyncio.sleep(0.05)
+        return data
 
     async def __getTwitterIDs(self):
+        async with httpx.AsyncClient() as client:
             coroutines = []
             for handle in self.__twitterHandle:
-                coroutines.append(self.__getID(handle))
+                coroutines.append(self.__getID(client, handle))
             info = await asyncio.gather(*coroutines)
+            await client.aclose()
             return info
-                    
-      
-    def getTwitterGuestData(self, cookies, proxySupport=False):
-        if proxySupport:
-            wireOptions = {
-                'proxy': self.proxies
-            }
-        else:
-            wireOptions = None
-
+ 
+    def getTwitterGuestData(self, cookies):
         print("gathering meta-information")
+        self.__resetData() #clear old data
+            
         # get driver
         options = Options()
         options.add_argument("--headless")
         driver = webdriver.Chrome(self.__chromedriverPath, options=options) #headless
-        #driver = webdriver.Chrome(self.__chromedriverPath, seleniumwire_options=wireOptions, options=options) #headless, proxy
         #driver = webdriver.Chrome(self.__chromedriverPath) #window
-
-
-        if self.__multipleHandles:
-            driver.get(f"https://twitter.com/{self.__twitterHandle[0]}")
-        else:
-            driver.get(f"https://twitter.com/{self.__twitterHandle}")
+    
+    
+        driver.get(f"https://twitter.com/{self.__twitterHandle[0]}")
         #time.sleep(self.__timeout)  # sleep to let the twitter page load
-
+        
+        
         headersDict = {}
         for headerReq in driver.requests:
             url = headerReq.url
             if "UserTweets" in url and "cursor" not in url:
-                reqUrl = url
-                userID = url.split("userId%22%3A%22")[1].split("%22%2C%22count%22")[0]
+                self.__reqUrl = url
                 headersDict = dict(headerReq.headers)
         time.sleep(1)
+        
         driver.close()
         
-        headers = {
+        self.__headers = {
             'authorization': headersDict['authorization'],
             'cookie': headersDict['cookie'],
             'user-agent': headersDict['user-agent'],
@@ -173,77 +159,132 @@ class TwitterScraper:
         
         # check for cookies
         if cookies != "":
-            # get dummy URL to set cookies
-            driver.get("https://twitter.com")
-            cookies = self.cookieDict(cookies)
-            for key, value in cookies.items():
-                driver.add_cookie({'name': key, 'value': value, "domain": ".twitter.com"})
+            self.__cookies = self.cookieDict(cookies)
         else:
-            cookies = self.cookieDict(headersDict['cookie'])
+            self.__cookies = self.cookieDict(headersDict['cookie'])
         print("Done!")
 
-
-        return headers, headersDict, cookies, reqUrl, userID
-
-    def closeSession(self):
-        self.__session.close()
+    def __resetData(self):
         self.__headers = None
         self.__openingResp = None
         self.__userResp = None
         self.__reqUrl = None
         self.__cookies = None
-        self.proxies = None
-
-    def getAllAccData(self):
-        """
-        returns all (unfiltered) data for the account
-        """
-        return self.__openingResp.json()
+  
     
-    # get Tweet data multiple Accs
-    async def __getTweetsPlainAsync(self, handle, id):
-        e1 = 0
-        while e1 < 5:
+    
+    
+    
+    # get Twitter data methodes
+    ## get user data
+    async def __getUserPlainAsync(self, client: httpx.AsyncClient, handle, id):
+        retries = 0
+        while retries < 5:
             try:
                 urlTwitter = f"https://api.twitter.com/graphql/CkON7wJrKLwEVV59ClcmjA/UserTweets?variables=%7B%22userId%22%3A%22{id}%22%2C%22count%22%3A40%2C%22includePromotedContent%22%3Atrue%2C%22withQuickPromoteEligibilityTweetFields%22%3Atrue%2C%22withSuperFollowsUserFields%22%3Atrue%2C%22withDownvotePerspective%22%3Afalse%2C%22withReactionsMetadata%22%3Afalse%2C%22withReactionsPerspective%22%3Afalse%2C%22withSuperFollowsTweetFields%22%3Atrue%2C%22withVoice%22%3Atrue%2C%22withV2Timeline%22%3Atrue%7D&features=%7B%22responsive_web_twitter_blue_verified_badge_is_enabled%22%3Atrue%2C%22responsive_web_graphql_exclude_directive_enabled%22%3Atrue%2C%22verified_phone_label_enabled%22%3Afalse%2C%22responsive_web_graphql_timeline_navigation_enabled%22%3Atrue%2C%22responsive_web_graphql_skip_user_profile_image_extensions_enabled%22%3Afalse%2C%22tweetypie_unmention_optimization_enabled%22%3Atrue%2C%22vibe_api_enabled%22%3Atrue%2C%22responsive_web_edit_tweet_api_enabled%22%3Atrue%2C%22graphql_is_translatable_rweb_tweet_is_translatable_enabled%22%3Atrue%2C%22view_counts_everywhere_api_enabled%22%3Atrue%2C%22longform_notetweets_consumption_enabled%22%3Atrue%2C%22tweet_awards_web_tipping_enabled%22%3Afalse%2C%22freedom_of_speech_not_reach_fetch_enabled%22%3Afalse%2C%22standardized_nudges_misinfo%22%3Atrue%2C%22tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled%22%3Afalse%2C%22interactive_text_enabled%22%3Atrue%2C%22responsive_web_text_conversations_enabled%22%3Afalse%2C%22longform_notetweets_richtext_consumption_enabled%22%3Afalse%2C%22responsive_web_enhance_cards_enabled%22%3Afalse%7D"
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(urlTwitter, headers=self.__headers) as resp:
-                        data = await resp.json()
-                        data = {"handle": handle, "id": id, "resp": data['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries']}
+                resp = await client.get(urlTwitter, headers=self.__headers)
+                data = resp.json()
+                data = {"handle": handle, "id": id, "resp": data}
+                break
+            except Exception as e:
+                raise Exception(e)
+        return data
+    
+    
+    async def __getUserPlainMain(self):
+        try:
+            async with httpx.AsyncClient(proxies=self.changeProxy()) as client:
+                coroutines = []
+                for data in self._IDList:
+                    coroutines.append(self.__getUserPlainAsync(client, data['handle'], data['id']))
+                info = await asyncio.gather(*coroutines)
+        except Exception as e:
+                raise Exception(e)
+        return info
+    
+    def getUserPlain(self):
+        """
+        get all (unfiltered) data from every account in your handle list ("unnecessary" data and ads included)
+        
+        :return: [{"handle": handle1, "id": id1, "resp": data1}, {"handle": handle2, "id": id2, "resp": data2},]
+        """
+        retries = 0
+        while retries < 5:
+            try:
+                resp = asyncio.run(self.__getUserPlainMain())
                 break
             except:
-                print(traceback.format_exc())
+                #print(traceback.format_exc())
                 print("failed to scrape tweets. Trying again with new data")
-                e1 = e1 + 1
-                self.__proxyCounter = self.__proxyCounter + 1
-                __twitterData = self.getTwitterGuestData(cookies=self.__accCookies)
-                self.__headers = __twitterData[0]
-                self.__headersDict = __twitterData[1]
-                self.__cookies = __twitterData[2]
+                retries += 1
+                self.__proxyCounter += 1
+                self.getTwitterGuestData(cookies=self.__accCookies)
+                
+        return resp
+    
+    ## get twitter data
+    async def __getTweetsPlainAsync(self, client: httpx.AsyncClient, handle, id):
+        retries = 0
+        while retries < 5:
+            try:
+                urlTwitter = f"https://api.twitter.com/graphql/CkON7wJrKLwEVV59ClcmjA/UserTweets?variables=%7B%22userId%22%3A%22{id}%22%2C%22count%22%3A40%2C%22includePromotedContent%22%3Atrue%2C%22withQuickPromoteEligibilityTweetFields%22%3Atrue%2C%22withSuperFollowsUserFields%22%3Atrue%2C%22withDownvotePerspective%22%3Afalse%2C%22withReactionsMetadata%22%3Afalse%2C%22withReactionsPerspective%22%3Afalse%2C%22withSuperFollowsTweetFields%22%3Atrue%2C%22withVoice%22%3Atrue%2C%22withV2Timeline%22%3Atrue%7D&features=%7B%22responsive_web_twitter_blue_verified_badge_is_enabled%22%3Atrue%2C%22responsive_web_graphql_exclude_directive_enabled%22%3Atrue%2C%22verified_phone_label_enabled%22%3Afalse%2C%22responsive_web_graphql_timeline_navigation_enabled%22%3Atrue%2C%22responsive_web_graphql_skip_user_profile_image_extensions_enabled%22%3Afalse%2C%22tweetypie_unmention_optimization_enabled%22%3Atrue%2C%22vibe_api_enabled%22%3Atrue%2C%22responsive_web_edit_tweet_api_enabled%22%3Atrue%2C%22graphql_is_translatable_rweb_tweet_is_translatable_enabled%22%3Atrue%2C%22view_counts_everywhere_api_enabled%22%3Atrue%2C%22longform_notetweets_consumption_enabled%22%3Atrue%2C%22tweet_awards_web_tipping_enabled%22%3Afalse%2C%22freedom_of_speech_not_reach_fetch_enabled%22%3Afalse%2C%22standardized_nudges_misinfo%22%3Atrue%2C%22tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled%22%3Afalse%2C%22interactive_text_enabled%22%3Atrue%2C%22responsive_web_text_conversations_enabled%22%3Afalse%2C%22longform_notetweets_richtext_consumption_enabled%22%3Afalse%2C%22responsive_web_enhance_cards_enabled%22%3Afalse%7D"
+                resp = await client.get(urlTwitter, headers=self.__headers)
+                data = resp.json()
+                data = {"handle": handle, "id": id, "resp": data['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries']}
+                break
+            except Exception as e:
+                raise Exception(e)
         return data
     
     
     async def __getTweetsPlainMain(self):
-        coroutines = []
-        for data in self._IDList:
-            coroutines.append(self.__getTweetsPlainAsync(data['handle'], data['id']))
-        info = await asyncio.gather(*coroutines)
+        try:
+            async with httpx.AsyncClient(proxies=self.changeProxy()) as client:
+                coroutines = []
+                for data in self._IDList:
+                    coroutines.append(self.__getTweetsPlainAsync(client, data['handle'], data['id']))
+                info = await asyncio.gather(*coroutines)
+        except Exception as e:
+                raise Exception(e)
         return info
     
-    def getTweetsPlainMultiple(self):
+    def getTweetsPlain(self):
         """
         get all (unfiltered) tweets from every account in your handle list (unnecessary data and ads included)
         
-        call with asyncio.run(scraper.getTweetsPlainMultiple())
+        :return: [{"handle": handle1, "id": id1, "resp": {1}}, {"handle": handle2, "id": id2, "resp": {2}}]
         """
-        resp = asyncio.run(self.__getTweetsPlainMain())
+        retries = 0
+        while retries < 5:
+            try:
+                resp = asyncio.run(self.__getTweetsPlainMain())
+                break
+            except:
+                #print(traceback.format_exc())
+                print("failed to scrape tweets. Trying again with new data")
+                retries += 1
+                self.__proxyCounter += 1
+                self.getTwitterGuestData(cookies=self.__accCookies)
+                
         return resp
-    
-    def getTweetsTextMultiple(self):
+
+    def getTweetsText(self):
         """
         get text from all tweets from every account in your handle list
+        
+        :return: [{'entryId': entryId1, 'retweet': retweet1, 'text': text1}, {'entryId': entryId2, 'retweet': retweet2, 'text': text2}]
         """
-        resp = asyncio.run(self.__getTweetsPlainMain())
+        retries = 0
+        while retries < 5:
+            try:
+                resp = asyncio.run(self.__getTweetsPlainMain())
+                break
+            except:
+                #print(traceback.format_exc())
+                print("failed to scrape tweets. Trying again with new data")
+                retries += 1
+                self.__proxyCounter += 1
+                self.getTwitterGuestData(cookies=self.__accCookies)
     
         accountTweets = []
         for handle in resp:
@@ -253,7 +294,7 @@ class TwitterScraper:
                     try:
                         tweets.append({
                             'entryId': tweet['entryId'],
-                            'retweet': self.getRetweetInfo(tweet),
+                            'retweet': self.filterRetweetInfo(tweet),
                             'text': tweet['content']['itemContent']['tweet_results']['result']['legacy']['full_text']})
                     except:
                         continue
@@ -263,16 +304,18 @@ class TwitterScraper:
                 "tweets": tweets
             })
         return accountTweets
+  
     
     
-
-    # get Tweet data
-        
-    def getRetweetInfo(self, singlePlainTweet, getRetweetInfo=False):
+    
+    
+    # filter methodes
+    ## filter Tweet data
+    def filterRetweetInfo(self, singlePlainTweet, getRetweetInfo=False):
         """
-        checks if the tweet is a retweet (returns True/False/TweetInfo)
+        checks if the tweet is a retweet (returns True, False or the TweetInfo (if you use getRetweetInfo=True))
 
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         :param getRetweetInfo: default=False -> get all info about the retweetet tweet
         """
 
@@ -283,131 +326,103 @@ class TwitterScraper:
                 return True
         else:
             return False
+        
+    def filterTweetCreatedAt(self, singlePlainTweet):
+        """
+        returns creation date of a tweet
 
-    def getTweetsPlain(self):
-        """
-        get all (unfiltered) tweets from an account (unnecessary data included)
-        """
-        e1 = 0
-        while e1 < 5:
-            try:
-                resp = self.__session.get(url=self.__reqUrl, headers=self.__headers, cookies=self.__cookies, proxies=self.changeProxy())
-                jresp = resp.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries']
-                break
-            except:
-                #print(traceback.format_exc())
-                print("failed to scrape tweets. Trying again with new data")
-                e1 = e1 + 1
-                self.__proxyCounter = self.__proxyCounter + 1
-                __twitterData = self.getTwitterGuestData(cookies=self.__accCookies)
-                self.__headers = __twitterData[0]
-                self.__headersDict = __twitterData[1]
-                self.__cookies = __twitterData[2]
-        return jresp
-
-    def getTweetsText(self):
-        """
-        get text from all tweets from an account
-        """
-        resp = self.getTweetsPlain()
-        tweets = []
-        for tweet in resp:
-            if "promotedTweet" not in tweet['entryId']:
-                try:
-                    tweets.append({
-                        'entryId': tweet['entryId'],
-                        'retweet': self.getRetweetInfo(tweet),
-                        'text': tweet['content']['itemContent']['tweet_results']['result']['legacy']['full_text']})
-                except:
-                    continue
-        return tweets
-
-    def getCreatedAt(self, singlePlainTweet):
-        """
-        returns createTimeDate of a tweet
-
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         """
         return singlePlainTweet['content']['itemContent']['tweet_results']['result']['legacy']['created_at']
 
-    def getID(self, singlePlainTweet):
+    def filterTweetID(self, singlePlainTweet):
         """
         returns the ID of a tweet
 
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         """
         return singlePlainTweet['content']['itemContent']['tweet_results']['result']['legacy']['id_str']
 
-    def getRetweetCount(self, singlePlainTweet):
+    def filterRetweetCount(self, singlePlainTweet):
         """
         returns how many times the tweet has been retweeted
 
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         """
         return singlePlainTweet['content']['itemContent']['tweet_results']['result']['legacy']['retweet_count']
 
-    def getReplyCount(self, singlePlainTweet):
+    def filterReplyCount(self, singlePlainTweet):
         """
         returns how many replies the tweet has
 
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         """
         return singlePlainTweet['content']['itemContent']['tweet_results']['result']['legacy']['reply_count']
 
-    def getViews(self, singlePlainTweet):
+    def filterViews(self, singlePlainTweet):
         """
         returns how many views the tweet has
 
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         """
         return singlePlainTweet['content']['itemContent']['tweet_results']['result']['views']['count']
 
-    def getPinnedTweetInfo(self):
+    ## filter Account data
+    def __defaultAccountFilter(self, singleUserPlain):
+        return singleUserPlain['resp']['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries'][0]['content']['itemContent']['tweet_results']['result']['core']['user_results']['result']
+    
+    def filterPinnedTweetInfo(self, singleUserPlain):
         """
-        returns all (unfiltered) information about the pinned tweet
+        returns all (unfiltered) information about the pinned tweet of an Account
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return \
-        self.__openingResp['data']['user']['result']['timeline_v2']['timeline']['instructions'][2]['entry']['content']['itemContent']['tweet_results']['result']
-
-    # get User data
-    def isBusinessAccount(self):
+        return singleUserPlain['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries'][0]['content']['itemContent']['tweet_results']['result']
+        
+    def filterIsBusinessAccount(self, singleUserPlain):
         """
         returns if the account is a business account
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return self.__userResp['business_account']
+        return self.__defaultAccountFilter(singleUserPlain)['business_account']
 
-    def hasNftAvatar(self):
-        """
-        returns if the account has an NFT avatar
-        """
-        return self.__userResp['has_nft_avatar']
-
-    def userID(self):
+    def filterUserID(self, singleUserPlain):
         """
         returns the id of an account
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return self.__userResp['id']
+        return self.__defaultAccountFilter(singleUserPlain)['id']
 
-    def isBlueVerified(self):
+    def filterIsBlueVerified(self, singleUserPlain):
         """
         returns if the account is verified with a twitter blue check
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return self.__userResp['is_blue_verified']
+        return self.__defaultAccountFilter(singleUserPlain)['is_blue_verified']
 
-    def createdAt(self):
+    def filterAccountCreationDate(self, singleUserPlain):
         """
         returns the creation time of an account
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return self.__userResp['legacy']['created_at']
+        return self.__defaultAccountFilter(singleUserPlain)['legacy']['created_at']
 
-    def description(self):
+    def filterDescription(self, singleUserPlain):
         """
         returns the description of an account
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return self.__userResp['legacy']['description']
+        return self.__defaultAccountFilter(singleUserPlain)['legacy']['description']
 
-    def getAllUserData(self):
+    def getUserSpecificData(self, singleUserPlain):
         """
         returns all (unfiltered) data about an account
+        
+        :param getUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
         """
-        return self.__userResp
+        return self.__defaultAccountFilter(singleUserPlain)
