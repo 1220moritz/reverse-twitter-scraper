@@ -1,5 +1,5 @@
 # ReverseTwitterScraper
-ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a single or multiple Twitter accounts. This package uses Selenium and Requests module to scrape tweets.
+ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a single or multiple Twitter accounts. This package uses Selenium and httpx to scrape tweets and other account data.
 
 ## Links
 GitHub: https://github.com/1220moritz/reverse-twitter-scraper  
@@ -28,31 +28,29 @@ timeout = 5
 proxy_list = []
 
 # single account
-twitter_handle = "elonmusk"
-scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, timeout, proxy_list)
+twitter_handle = ["elonmusk"]
+scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, proxy_list)
 tweets = scraper.getTweetsText()
 
 # multiple accounts
 twitter_handles = ["elonmusk", "POTUS", "latestinspace"]
-scraper = TwitterScraper(twitter_handles, chromedriver_path, cookies, timeout, proxy_list)
-tweets = scraper.getTweetsTextMultiple()
+scraper = TwitterScraper(twitter_handles, chromedriver_path, cookies, proxy_list)
+tweets = scraper.getTweetsText()
 
 print(tweets)
 ```
 
 In the above code, we first import the TwitterScraper class from the package. Then, we create an object of the TwitterScraper class with the required parameters.
-Finally, we call the getAllTweetsText() method to get the tweets of the specified Twitter account.
+Finally, we call the getTweetsText() method to get the tweets of the specified Twitter account.
 
 ## Parameters
 The TwitterScraper class takes the following parameters:
 
-- twitterHandle: The Twitter handle of the account(s) to be scraped. For example, if the account URL is https://twitter.com/elonmusk, then the twitterHandle parameter should be set to elonmusk.
+- twitterHandle: The Twitter handle of the account(s) to be scraped. For example, if the account URL is https://twitter.com/elonmusk, then the twitterHandle parameter should be set to ['elonmusk'].
 
 - chromedriverPath: The path of the Chrome driver executable file. This file is required to use the Selenium module.
 
 - cookies: (Optional) The cookies of a logged-in Twitter account. If you have a Twitter account and want to scrape tweets that are not publicly available, you can pass the cookies of your logged-in account.
-
-- timeout: (Optional) The time (in seconds) to wait for the page to load. The default value is 5 seconds.
 
 - proxyList: (Optional) A list of proxies to use for scraping. The list should contain proxy addresses in the format ip:port:user:pw.
 
@@ -72,70 +70,72 @@ By following these steps, you should be able to retrieve the necessary cookies f
 
 ## Methodes:
 
-### getTweetsPlainMultiple()
-      this is only if you want to scrape multiple twitter acccounts
+## get twitter data
+### getUserPlain()
+      get all (unfiltered) data from every account in your handle list ("unnecessary" data and ads included)
+      returns [{"handle": handle1, "id": id1, "resp": data1}, {"handle": handle2, "id": id2, "resp": data2},]
+
+### getTweetsPlain()
       get all (unfiltered) tweets from every account in your handle list (unnecessary data and ads included)
+      returns [{"handle": handle1, "id": id1, "resp": {1}}, {"handle": handle2, "id": id2, "resp": {2}}]
      
-### getTweetsTextMultiple()
-      this is only if you want to scrape multiple twitter acccounts
+### getTweetsText()
       get text from all tweets from every account in your handle list
+      returns [{'entryId': entryId1, 'retweet': retweet1, 'text': text1}, {'entryId': entryId2, 'retweet': retweet2, 'text': text2}]
 
-### getAllAccData()
-      returns all (unfiltered) data for the account
 
-### getRetweetInfo(singlePlainTweet, getRetweetInfo=False):
-        checks if the tweet is a retweet (returns True/False/TweetInfo)
-
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+## filter Tweet data
+### filterRetweetInfo(singlePlainTweet, getRetweetInfo=False):
+        checks if the tweet is a retweet (returns True, False or the TweetInfo (if you use getRetweetInfo=True))
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
         :param getRetweetInfo: default=False -> get all info about the retweetet tweet
-        
-### getAllTweetsPlain()
-      get all tweets from an account (unnecessary data included)
-
-
-### getAllTweetsText()
-      get a dict with text, tweetID and retweetInfo from all tweets from an account
       
-### getCreatedAt(singlePlainTweet)
+### filterTweetCreatedAt(singlePlainTweet)
     returns createTimeDate of a tweet
-    :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+    :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
 
-### getID(singlePlainTweet)
+### filterTweetID(singlePlainTweet)
         returns the ID of a tweet
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
 
-### getRetweetCount(singlePlainTweet)
+### filterRetweetCount(singlePlainTweet)
         returns how many times the tweet has been retweeted
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
 
-### getReplyCount( singlePlainTweet)
+### filterReplyCount( singlePlainTweet)
         returns how many replies the tweet has
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
 
-### getViews(singlePlainTweet)
+### filterViews(singlePlainTweet)
         returns how many views the tweet has
-        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getAllTweetsPlain to get the info
+        :param singlePlainTweet: plain (unfiltered) info of a tweet. Use getTweetsPlain() to get the info
 
-### getPinnedTweetInfo()
+
+## filter Account data
+### filterPinnedTweetInfo(singleUserPlain)
         returns all (unfiltered) information about the pinned tweet
+		:param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
 
-### isBusinessAccount()
+### filterIsBusinessAccount(singleUserPlain)
         returns if the account is a business account
+        :param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
 
-### hasNftAvatar()
-        returns if the account has an NFT avatar
+### filterUserID(singleUserPlain)
+        returns the id of an account
+        :param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
 
-### userID()
-        returns the userID of the account
-
-### isBlueVerified()
+### filterIsBlueVerified(singleUserPlain)
         returns if the account is verified with a twitter blue check
+        :param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
 
-### createdAt()
+### filterAccountCreationDate(singleUserPlain)
         returns the creation time of an account
+        :param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
 
-### description()
+### filterDescription(singleUserPlain)
         returns the description of an account
+        :param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
 
-### getAllUserData()
+### getUserSpecificData(singleUserPlain)
         returns all (unfiltered) data about an account
+        :param singleUserPlain: plain (unfiltered) info of a Twitter account. Use getUserPlain() to get the info
