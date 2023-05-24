@@ -1,6 +1,6 @@
 import time
 import traceback
-
+import json
 import asyncio
 import httpx
 from seleniumwire import webdriver
@@ -28,7 +28,9 @@ class TwitterScraper:
         return cookies
 
     def changeProxy(self):
-        if type(self.proxies) is list and self.__proxyCounter < len(self.proxies) - 1:    #change to next proxy in list
+        if len(self.proxies) == 0:
+            return None
+        elif type(self.proxies) is list and self.__proxyCounter < len(self.proxies) - 1:    #change to next proxy in list
             return self.proxies[self.__proxyCounter]
         elif type(self.proxies) is list and self.__proxyCounter >= len(self.proxies) - 1: # restart with first proxy in list
             self.__proxyCounter = 0
@@ -55,7 +57,7 @@ class TwitterScraper:
             self.proxies = []
             for proxy in proxyList:
                 __split = str(proxy).replace("\n", "").split(":")
-                fProxy = {'https': f'http://{__split[2]}:{__split[3]}@{__split[0]}:{__split[1]}'}
+                fProxy = {f'all://': f'https://{__split[2]}:{__split[3]}@{__split[0]}:{__split[1]}'}
                 self.proxies.append(fProxy)
         else:
             self.proxies = None
@@ -91,8 +93,9 @@ class TwitterScraper:
         retries = 0
         while retries < 5:
             try:
-                self.__openingResp = httpx.get(url=self.__reqUrl, headers=self.__headers, cookies=self.__cookies).json()
-                self.__userResp = self.__openingResp['data']['user']['result']['timeline_v2']['timeline']['instructions'][1]['entries'][0]['content']['itemContent']['tweet_results']['result']['core']['user_results']['result']
+                resp =  httpx.get(url=self.__reqUrl, headers=self.__headers, cookies=self.__cookies)
+                if resp.status_code == 200:
+                    print("got valid meta-information")
                 break
             except:
                 #print(traceback.format_exc())
@@ -134,8 +137,7 @@ class TwitterScraper:
         #driver = webdriver.Chrome(self.__chromedriverPath) #window
     
     
-        driver.get(f"https://twitter.com/{self.__twitterHandle[0]}")
-        #time.sleep(self.__timeout)  # sleep to let the twitter page load
+        driver.get(f"https://twitter.com/{self.__twitterHandle[0]}") 
         
         
         headersDict = {}
@@ -155,19 +157,18 @@ class TwitterScraper:
             'x-csrf-token': headersDict['x-csrf-token'],
             'x-guest-token': headersDict['x-guest-token']
         }
-
         
         # check for cookies
-        if cookies != "":
-            self.__cookies = self.cookieDict(cookies)
+        if type(cookies) is dict and 'Cookie' in cookies and 'X-Csrf-Token' in cookies:
+            self.__cookies = self.cookieDict(cookies['Cookie'])
+            self.__headers['cookie'] = cookies['Cookie']
+            self.__headers['x-csrf-token'] = cookies['X-Csrf-Token']
         else:
             self.__cookies = self.cookieDict(headersDict['cookie'])
-        print("Done!")
+
 
     def __resetData(self):
         self.__headers = None
-        self.__openingResp = None
-        self.__userResp = None
         self.__reqUrl = None
         self.__cookies = None
   
@@ -304,10 +305,7 @@ class TwitterScraper:
                 "tweets": tweets
             })
         return accountTweets
-  
-    
-    
-    
+
     
     # filter methodes
     ## filter Tweet data
