@@ -23,18 +23,14 @@ Here's an example code:
 from ReverseTwitterScraper import TwitterScraper
 
 chromedriver_path = "C:/Program Files (x86)/chromedriver.exe"
-cookies = ""
-timeout = 5
+cookies = "" #no account cookies
+cookies = {'Cookie': 'your Cookie', 'X-Csrf-Token': 'your csrf token'} #with account cookie
 proxy_list = []
 
-# single account
-twitter_handle = ["elonmusk"]
-scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, proxy_list)
-tweets = scraper.getTweetsText()
 
-# multiple accounts
-twitter_handles = ["elonmusk", "POTUS", "latestinspace"]
-scraper = TwitterScraper(twitter_handles, chromedriver_path, cookies, proxy_list)
+twitter_handle = ["elonmusk"]  # single account
+twitter_handles = ["elonmusk", "POTUS", "latestinspace"]  # multiple accounts
+scraper = TwitterScraper(twitter_handle, chromedriver_path, cookies, proxy_list)
 tweets = scraper.getTweetsText()
 
 print(tweets)
