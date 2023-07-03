@@ -1,4 +1,5 @@
 # ReverseTwitterScraper
+## IMPORTANT UPDATE: Twitter has introduced a change in its system, which now mandates the use of account cookies for viewing tweets. While our current package version already supports scraping with cookies, this feature will become a requirement in our forthcoming update.
 ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a single or multiple Twitter accounts. This package uses Selenium and httpx to scrape tweets and other account data.
 
 ## Links
