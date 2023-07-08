@@ -1,6 +1,13 @@
 # ReverseTwitterScraper
-## IMPORTANT UPDATE: Twitter has introduced a change in its system, which now mandates the use of account cookies for viewing tweets. While our current package version already supports scraping with cookies, this feature will become a requirement in our forthcoming update.
+## Description
 ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a single or multiple Twitter accounts. This package uses Selenium and httpx to scrape tweets and other account data.
+
+## IMPORTANT NOTICE in 0.8
+**Twitter has introduced a change in its system, which now mandates the use of account cookies for viewing tweets.**
+
+Please note that the use of cookies is associated with a **high risk of account suspension or ban** by Twitter.  
+Using account cookies essentially means that you are automating actions on behalf of a specific user account, which is against Twitter's Terms of Service. Always make sure to use this tool responsibly, adhering to Twitter's rules, and avoid excessive or suspicious activity that could lead to account limitations. Always make sure that you are informed about and compliant with the Twitter Terms of Service, as well as all relevant privacy laws and regulations.   
+**The creators of the ReverseTwitterScraper are not responsible for any misuse of the tool or violations of these terms.**
 
 ## Links
 GitHub: https://github.com/1220moritz/reverse-twitter-scraper  
@@ -24,8 +31,7 @@ Here's an example code:
 from ReverseTwitterScraper import TwitterScraper
 
 chromedriver_path = "C:/Program Files (x86)/chromedriver.exe"
-cookies = "" #no account cookies
-cookies = {'Cookie': 'your Cookie', 'X-Csrf-Token': 'your csrf token'} #with account cookie
+cookies = {'Cookie': 'your Cookie', 'X-Csrf-Token': 'your csrf token'} # required account cookie
 proxy_list = []
 
 
@@ -43,23 +49,23 @@ Finally, we call the getTweetsText() method to get the tweets of the specified T
 ## Parameters
 The TwitterScraper class takes the following parameters:
 
-- twitterHandle: The Twitter handle of the account(s) to be scraped. For example, if the account URL is https://twitter.com/elonmusk, then the twitterHandle parameter should be set to ['elonmusk'].
+- twitterHandle (Required): The Twitter handle of the account(s) to be scraped. For example, if the account URL is https://twitter.com/elonmusk, then the twitterHandle parameter should be set to ['elonmusk'].
 
-- chromedriverPath: The path of the Chrome driver executable file. This file is required to use the Selenium module.
+- chromedriverPath (Required): The path of the Chrome driver executable file. This file is required to use the Selenium module.
 
-- cookies: (Optional) The cookies of a logged-in Twitter account. If you have a Twitter account and want to scrape tweets that are not publicly available, you can pass the cookies of your logged-in account.
+- cookies (Required): The cookies of a logged-in Twitter account. If you have a Twitter account and want to scrape tweets that are not publicly available, you can pass the cookies of your logged-in account.
 
 - proxyList: (Optional) A list of proxies to use for scraping. The list should contain proxy addresses in the format ip:port:user:pw.
 
 
-## How to get account cookies:
+## How to get account cookies + x-csrf-token:
 Following a private "target" account is necessary to access its data. Then, account cookies can be used to scrape the account.
 1. Open the Chrome browser and go to the Twitter website.
 2. If you're not already logged in, log in to your Twitter account.
 3. Right-click anywhere on the page and select "Inspect" from the context menu. Alternatively, you can press "Ctrl+Shift+I" (Windows) or "Cmd+Option+I" (Mac) on your keyboard.
 4. This will open the Developer Tools pane. Click on the "Network" tab at the top and then filter with fetch/XHR.
 5. On the left-hand sidebar, click on any request.
-6. You should now see a list of metadata associated with this specific request. Look for the "Request Headers" section and then find the "cookies" entry. Copy the entire value of the cookies.
+6. You should now see a list of metadata associated with this specific request. Look for the "Request Headers" section and then find the "cookies" and x-csrf-token entries. Copy the entire value of the cookies and x-csrf-token.
 7. In your Python code, create a new instance of the TwitterScraper class and paste the cookie value as the value of the "cookies" parameter.
 8. That's it! You can now use the TwitterScraper class to scrape data from your Twitter account.  
 
