@@ -38,7 +38,7 @@ class TwitterScraper:
         else:
             return None
         
-    def __init__(self, twitterHandle: list, chromedriverPath: str, cookies="", proxyList=""):
+    def __init__(self, twitterHandle: list, chromedriverPath: str, cookies: dict, proxyList=""):
         """
         makes everything ready to scrape twitter.
 
@@ -85,8 +85,10 @@ class TwitterScraper:
             try:
                 self.getTwitterGuestData(cookies=cookies)
                 break
+            except KeyboardInterrupt:
+                exit("KeyboardInterrupt")
             except:
-                #print(traceback.format_exc())
+                print(traceback.format_exc())
                 retries += 1
                 self.__proxyCounter += 1
             
@@ -98,7 +100,7 @@ class TwitterScraper:
                     print("got valid meta-information")
                 break
             except:
-                #print(traceback.format_exc())
+                print(traceback.format_exc())
                 print("failed openingResp. Trying again with new proxy")
                 retries += 1
                 self.__proxyCounter += 1
@@ -130,14 +132,17 @@ class TwitterScraper:
         print("gathering meta-information")
         self.__resetData() #clear old data
             
-        # get driver
+        # create driver
         options = Options()
         options.add_argument("--headless")
         driver = webdriver.Chrome(self.__chromedriverPath, options=options) #headless
-        #driver = webdriver.Chrome(self.__chromedriverPath) #window
-    
-    
-        driver.get(f"https://twitter.com/{self.__twitterHandle[0]}") 
+        # driver = webdriver.Chrome(self.__chromedriverPath) #window
+
+        # add cookies to selenium
+        driver.get(f"https://twitter.com/{self.__twitterHandle[0]}") # get correct url to set cookies
+        for key, value in self.cookieDict(cookies['Cookie']).items():
+            driver.add_cookie({"name": key, "value": value})
+        driver.get(f"https://twitter.com/{self.__twitterHandle[0]}") # again same url to get needed headers
         
         
         headersDict = {}
@@ -154,8 +159,7 @@ class TwitterScraper:
             'authorization': headersDict['authorization'],
             'cookie': headersDict['cookie'],
             'user-agent': headersDict['user-agent'],
-            'x-csrf-token': headersDict['x-csrf-token'],
-            'x-guest-token': headersDict['x-guest-token']
+            'x-csrf-token': headersDict['x-csrf-token']
         }
         
         # check for cookies
