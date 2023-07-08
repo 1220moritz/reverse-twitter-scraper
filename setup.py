@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="ReverseTwitterScraper",
-    version="0.0.3",
+    version="0.8",
     author="1220moritz",
     description="A Python package for scraping Twitter data without API. With proxy and account-cookie support",
     long_description=long_description,
@@ -14,7 +14,8 @@ setup(
       install_requires=[
           'selenium-wire',
           'selenium',
-          "requests",
+          "httpx",
+          "asyncio"
       ],
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -22,4 +23,10 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.6",
+    project_urls={
+        "Documentation": "https://github.com/1220moritz/reverse-twitter-scraper/blob/main/README.md",
+        "Github": "https://github.com/1220moritz/reverse-twitter-scraper",
+        "PyPi": "https://pypi.org/project/ReverseTwitterScraper/",
+        "Contact": "https://discordapp.com/users/713118695165263923",
+    },
 )
