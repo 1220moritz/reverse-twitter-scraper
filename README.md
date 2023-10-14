@@ -1,4 +1,5 @@
 # ReverseTwitterScraper
+[![Downloads](https://static.pepy.tech/badge/ReverseTwitterScraper)](https://pepy.tech/project/ReverseTwitterScraper)
 ## Description
 ReverseTwitterScraper is a Python package that provides an easy-to-use tool for scraping tweets of a single or multiple Twitter accounts. This package uses Selenium and httpx to scrape tweets and other account data.
 
